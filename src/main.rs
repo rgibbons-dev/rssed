@@ -9,14 +9,15 @@ async fn fetch_feed(feed: &str) -> Result<Channel, Box<dyn Error>> {
         .bytes()
         .await?;
     let channel = Channel::read_from(&content[..])?;
+    println!("{:#?}", channel);
     Ok(channel)
 }
 
-async fn _get_descr(url: &str) -> Option<String> {
+async fn get_title(url: &str) -> Option<String> {
     if let Ok(channel) = fetch_feed(url).await {
         let v_chan = channel.into_items();
-        if let Some(descr) = v_chan[0].description.clone() {
-            Some(descr)
+        if let Some(title) = v_chan[0].title.clone() {
+            Some(title)
         } else {
             None
         }
@@ -27,18 +28,23 @@ async fn _get_descr(url: &str) -> Option<String> {
 
 #[tokio::main]
 async fn main() {
-    let mut store = Vec::new();
+    let mut store: Vec<(String, Channel)> = Vec::new();
     loop {
         let mut user_input = String::new();
         let stdin = io::stdin();
         stdin.lock().read_line(&mut user_input).unwrap();
         let tkns: Vec<&str> = user_input.split(' ').collect();
-        let cmd = tkns[0];
+        let cmd = tkns[0].trim();
         let len = cmd.len();
         if len > 1 {
             if let Some(cmd_la) = cmd.chars().last() {
                 if cmd_la == 'p' {
-                    println!("p");
+                    let (cur_url, _cur_chan) = store[0].to_owned();
+                    if let Some(title) = get_title(cur_url.as_str()).await {
+                        println!("{}", title);
+                    } else {
+                        println!("?");
+                    }
                 } else if cmd_la == 'd' {
                     println!("d");
                 } else {
@@ -49,7 +55,8 @@ async fn main() {
             }
         } else {
             if cmd == "a" {
-                let url = tkns[1].to_owned();
+                let url = tkns[1].trim().to_owned();
+                println!("{}", url);
                 if let Ok(chan) = fetch_feed(&url).await {
                     store.push((url, chan));
                 } else {
@@ -66,6 +73,8 @@ async fn main() {
                         break;
                     }
                 }
+            } else if cmd == "q" {
+                break;
             } else {
                 println!("?");
             }
