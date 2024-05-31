@@ -26,9 +26,23 @@ async fn get_title(url: &str) -> Option<String> {
     }
 }
 
+struct Single(usize);
+
+struct Range {
+    start: usize,
+    end: usize
+}
+
+enum LineAddress {
+    Single(usize),
+    Many(Range)
+}
+
 #[tokio::main]
 async fn main() {
     let mut store: Vec<(String, Channel)> = Vec::new();
+    let mut current_line = 0;
+    let mut current_addr = LineAddress::Single(0);
     loop {
         let mut user_input = String::new();
         let stdin = io::stdin();
@@ -37,7 +51,23 @@ async fn main() {
         let cmd = tkns[0].trim();
         let len = cmd.len();
         if len > 1 {
-            if let Some(cmd_la) = cmd.chars().last() {
+            let line_address: Vec<char> = cmd.chars().clone().collect();
+            let la_len = line_address.len();
+            if la_len == 1 {
+                let addr = line_address[0];
+                if addr == '.' {
+                    current_addr = LineAddress::Single(current_line);
+                } else if addr == '$' {
+                    current_addr = LineAddress::Single(store.len());
+                } else if addr == ';' {
+                    current_addr = LineAddress::Many(Range { start: current_line, end: store.len() });
+                } else if addr == ',' {
+                    current_addr = LineAddress::Many(Range { start: 0, end: store.len() });
+                } else if let Ok(x) = addr.to_string().parse::<usize>() {
+                    current_addr = LineAddress::Single(x);
+                }
+            }
+            if let Some(cmd_la) = line_address.clone().pop() {
                 if cmd_la == 'p' {
                     let (cur_url, _cur_chan) = store[0].to_owned();
                     if let Some(title) = get_title(cur_url.as_str()).await {
