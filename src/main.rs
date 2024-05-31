@@ -9,7 +9,7 @@ async fn fetch_feed(feed: &str) -> Result<Channel, Box<dyn Error>> {
         .bytes()
         .await?;
     let channel = Channel::read_from(&content[..])?;
-    println!("{:#?}", channel);
+    //println!("{:#?}", channel);
     Ok(channel)
 }
 
@@ -26,15 +26,18 @@ async fn get_title(url: &str) -> Option<String> {
     }
 }
 
-struct Single(usize);
+struct Single {
+    addr: usize
+}
 
 struct Range {
     start: usize,
     end: usize
 }
 
+// TODO: impl Clone and Copy on Range and Single
 enum LineAddress {
-    Single(usize),
+    One(Single),
     Many(Range)
 }
 
@@ -42,7 +45,7 @@ enum LineAddress {
 async fn main() {
     let mut store: Vec<(String, Channel)> = Vec::new();
     let mut current_line = 0;
-    let mut current_addr = LineAddress::Single(0);
+    let mut current_addr = LineAddress::One(Single { addr: 0 });
     loop {
         let mut user_input = String::new();
         let stdin = io::stdin();
@@ -56,24 +59,44 @@ async fn main() {
             if la_len == 1 {
                 let addr = line_address[0];
                 if addr == '.' {
-                    current_addr = LineAddress::Single(current_line);
+                    current_addr = LineAddress::One(Single { addr: current_line });
                 } else if addr == '$' {
-                    current_addr = LineAddress::Single(store.len());
+                    current_addr = LineAddress::One(Single { addr: store.len() });
                 } else if addr == ';' {
                     current_addr = LineAddress::Many(Range { start: current_line, end: store.len() });
                 } else if addr == ',' {
                     current_addr = LineAddress::Many(Range { start: 0, end: store.len() });
                 } else if let Ok(x) = addr.to_string().parse::<usize>() {
-                    current_addr = LineAddress::Single(x);
+                    if x > store.len() {
+                        println!("?");
+                        continue;
+                    } else {
+                        current_addr = LineAddress::One(Single { addr: x });
+                    }
                 }
             }
             if let Some(cmd_la) = line_address.clone().pop() {
                 if cmd_la == 'p' {
-                    let (cur_url, _cur_chan) = store[0].to_owned();
-                    if let Some(title) = get_title(cur_url.as_str()).await {
-                        println!("{}", title);
-                    } else {
-                        println!("?");
+                    let addresses = match current_addr {
+                        LineAddress::One(ref state) => {
+                            let mut v = Vec::new();
+                            v.push(state.addr);
+                            v
+                        },
+                        LineAddress::Many(ref state) => {
+                            let mut v = Vec::new();
+                            v.push(state.start);
+                            v.push(state.end);
+                            v
+                        }
+                    };
+                    for addr in addresses {
+                        let (cur_url, _cur_chan) = store[addr].to_owned();
+                        if let Some(title) = get_title(cur_url.as_str()).await {
+                            println!("{}", title);
+                        } else {
+                            println!("?");
+                        }
                     }
                 } else if cmd_la == 'd' {
                     println!("d");
@@ -86,7 +109,7 @@ async fn main() {
         } else {
             if cmd == "a" {
                 let url = tkns[1].trim().to_owned();
-                println!("{}", url);
+                //println!("{}", url);
                 if let Ok(chan) = fetch_feed(&url).await {
                     store.push((url, chan));
                 } else {
