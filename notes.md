@@ -11,8 +11,9 @@
     * the main reason was i forgot to trim the command from the prefixed line address
         * once i did that i was able to print ranges
 * remaining work:
-    1. implement delete command
-    2. implement open feed command
-    3. implement exit feed command
-    4. reduce scope of current_address
-    5. impl fn to process items and pretty print
+    * [x] implement delete command
+    * [] implement open feed command
+    * ~~[] implement exit feed command~~ **CANCELED**
+    * [x] reduce scope of current_address
+    * [x] impl numbered ranges and larger numbers
+    * [] impl fn to process items and pretty print

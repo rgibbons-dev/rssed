@@ -9,22 +9,31 @@ async fn fetch_feed(feed: &str) -> Result<Channel, Box<dyn Error>> {
         .bytes()
         .await?;
     let channel = Channel::read_from(&content[..])?;
-    //println!("{:#?}", channel);
     Ok(channel)
 }
 
 async fn get_title(url: &str) -> Option<String> {
     if let Ok(channel) = fetch_feed(url).await {
         let v_chan = channel.into_items();
-        if let Some(title) = v_chan[0].title.clone() {
-            Some(title)
-        } else {
-            None
-        }
-    } else {
-        None
+        return Some(v_chan[0].title.clone()?)
     }
+    None
 }
+
+fn process_range(range_str: String, store_len: usize) -> Option<(usize, usize)> {
+    let mut src_dest = range_str.split(",");
+    let src = src_dest.next()?;
+    let dest = src_dest.next()?;
+    if let Ok(start) = src.parse::<usize>() {
+        if let Ok(end) = dest.parse::<usize>() {
+            if start < end && end <= store_len - 1 {
+                return Some((start, end))
+            }
+        }
+    } 
+    None
+}
+
 #[derive(Copy, Clone)]
 struct Single {
     addr: usize
@@ -41,11 +50,18 @@ enum LineAddress {
     Many(Range)
 }
 
+async fn cmd_p(url: String) {
+    if let Some(title) = get_title(url.as_str()).await {
+        println!("{}", title);
+    } else {
+        println!("?");
+    }
+}
+
 #[tokio::main]
 async fn main() {
     let mut store: Vec<(String, Channel)> = Vec::new();
     let mut current_line = 0;
-    let mut current_addr = LineAddress::One(Single { addr: 0 }); // can be more-locally scoped
     loop {
         // read user input
         let mut user_input = String::new();
@@ -59,10 +75,10 @@ async fn main() {
         // 1. commands that require line addressing,
         // 2. and those that don't
         if cmd_len > 1 {
+            let mut current_addr = LineAddress::One(Single { addr: current_line });
             let line_address: Vec<char> = cmd.chars().clone().collect();
             let all_but_cmd = &line_address[..line_address.len()-1];
             let la_len = all_but_cmd.len();
-            println!("{}", la_len);
             // two types of symbols for line addressing:
             // 1. single character
             // 2. multiple characters (a range or a number larger than 9)
@@ -76,43 +92,68 @@ async fn main() {
                     ',' => LineAddress::Many(Range { start: 0, end: bounds }),
                     _ => current_addr
                 };
+            } else {
+                let addrs = &all_but_cmd[..la_len-1];
+                let addrs_str = String::from_iter(addrs.iter().clone());
+                // there are two remaining types of line addressing that we want to handle:
+                // 1. x,y such that x < y and x nor y exceed the bounds of the feed store
+                // 2. numbers greater than 9
+                if addrs_str.contains(",") {
+                    if let Some((rg_start, rg_end)) = process_range(addrs_str, store.len()) {
+                        current_addr = LineAddress::Many(Range { start: rg_start, end: rg_end });
+                    } else {
+                        println!("?");
+                    }
+                } else if let Ok(addrs_num) = addrs_str.parse::<usize>() {
+                    if addrs_num < store.len() - 1 {
+                        current_addr = LineAddress::One(Single { addr: addrs_num });
+                    } else {
+                        println!("?");
+                    }
+                } else {
+                    println!("?");
+                }
             }
+            let addresses = match current_addr.clone() {
+                LineAddress::One(state) => {
+                    let mut v = Vec::new();
+                    v.push(state.addr);
+                    v
+                },
+                LineAddress::Many(state) => {
+                    let mut v = Vec::new();
+                    v.push(state.start);
+                    v.push(state.end);
+                    v
+                }
+            };
             if let Some(cmd_la) = line_address.clone().pop() {
                 if cmd_la == 'p' {
-                    let addresses = match current_addr.clone() {
-                        LineAddress::One(state) => {
-                            let mut v = Vec::new();
-                            v.push(state.addr);
-                            v
-                        },
-                        LineAddress::Many(state) => {
-                            let mut v = Vec::new();
-                            v.push(state.start);
-                            v.push(state.end);
-                            v
-                        }
-                    };
                     // it's a range, so we iterate
                     if addresses.len() > 1 {
                         for index in addresses[0]..=addresses[1] {
                             let (cur_url, _cur_chan) = store[index].to_owned();
-                            if let Some(title) = get_title(cur_url.as_str()).await {
-                                println!("{}", title);
-                            } else {
-                                println!("?");
-                            }
+                            cmd_p(cur_url).await;
                         }
                     } else {
                         let addr = addresses[0];
                         let (cur_url, _cur_chan) = store[addr].to_owned();
-                        if let Some(title) = get_title(cur_url.as_str()).await {
-                            println!("{}", title);
-                        } else {
-                            println!("?");
-                        }
+                        cmd_p(cur_url).await;
                     }
                 } else if cmd_la == 'd' {
-                    println!("d");
+                    if addresses.len() > 1 {
+                        for index in addresses[0]..=addresses[1] {
+                            store.remove(index);
+                        }
+                    } else {
+                        let addr = addresses[0];
+                        store.remove(addr);
+                    }
+                    if store.len() - 1 < current_line {
+                        current_line = store.len() - 1
+                    } else {
+                        println!("?");
+                    }
                 } else {
                     println!("?");
                 }
@@ -169,4 +210,4 @@ async fn main() {
 // print all lines :: 1 -> ,p
 
 // open feed :: 2 -> <l_a>o
-// exit feed :: 2 -> <l_a>o
+// exit feed :: 2 -> x
