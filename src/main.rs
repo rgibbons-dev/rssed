@@ -1,6 +1,7 @@
 use std::io::BufRead;
 use std::{error::Error, io};
-use rss::Channel;
+use rss::{Channel, Item};
+use html2text::from_read;
 
 
 async fn fetch_feed(feed: &str) -> Result<Channel, Box<dyn Error>> {
@@ -18,6 +19,19 @@ async fn get_title(url: &str) -> Option<String> {
         return Some(v_chan[0].title.clone()?)
     }
     None
+}
+
+fn process_item(item: &Item) -> Option<String> {
+    let title = item.title.clone()?;
+    let description = item.description.clone()?.replace("\n", "");
+    let b_description = description.as_bytes();
+    let fmt_description = from_read(b_description, 80);
+    let display = format!(r#"
+        {}
+        ===============
+        {}
+    "#, title, fmt_description);
+    Some(display)
 }
 
 fn process_range(range_str: String, store_len: usize) -> Option<(usize, usize)> {
@@ -154,6 +168,27 @@ async fn main() {
                     } else {
                         println!("?");
                     }
+                } else if cmd_la == 'o' {
+                    let (_o_url, o_chan) = &store[current_line];
+                    let mut item_store = Vec::new();
+                    o_chan.items().into_iter().for_each(|item| item_store.push(item));
+                    if addresses.len() > 1 {
+                        for index in addresses[0]..=addresses[1] {
+                            if let Some(pretty_item) = process_item(item_store[index]) {
+                                println!("{}", pretty_item);
+                            } else {
+                                println!("?");
+                                break;
+                            }
+                        }
+                    } else {
+                        let addr = addresses[0];
+                        if let Some(pretty_item) = process_item(item_store[addr]) {
+                            println!("{}", pretty_item);
+                        } else {
+                            println!("?");
+                        }
+                    }
                 } else {
                     println!("?");
                 }
@@ -197,17 +232,3 @@ async fn main() {
         }
     }
 }
-
-// repl
-// commands:
-// add feed :: 1 -> a <url>
-// get from all feeds :: 1 -> g
-// delete feed :: 1 -> <number>d
-// delete all feeds :: 1 -> ,d
-// delete feed at current index :: 1 -> .d
-// print :: 1 -> p
-// print nth line :: 1 -> <n>p
-// print all lines :: 1 -> ,p
-
-// open feed :: 2 -> <l_a>o
-// exit feed :: 2 -> x

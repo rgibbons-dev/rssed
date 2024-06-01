@@ -17,3 +17,4 @@
     * [x] reduce scope of current_address
     * [x] impl numbered ranges and larger numbers
     * [] impl fn to process items and pretty print
+* i think i need to maintain a separate current line for the item-level
