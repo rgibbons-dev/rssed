@@ -35,7 +35,7 @@ struct Range {
     end: usize
 }
 
-// TODO: impl Clone and Copy on Range and Single
+#[derive(Copy, Clone)]
 enum LineAddress {
     One(Single),
     Many(Range)
@@ -45,7 +45,7 @@ enum LineAddress {
 async fn main() {
     let mut store: Vec<(String, Channel)> = Vec::new();
     let mut current_line = 0;
-    let mut current_addr = LineAddress::One(Single { addr: 1 }); // TODO: this isn't mutating
+    let mut current_addr = LineAddress::One(Single { addr: 0 }); // TODO: this isn't mutating
     loop {
         // read user input
         let mut user_input = String::new();
@@ -60,33 +60,26 @@ async fn main() {
         // 2. and those that don't
         if cmd_len > 1 {
             let line_address: Vec<char> = cmd.chars().clone().collect();
-            let la_len = line_address.len();
+            let all_but_cmd = &line_address[..line_address.len()-1];
+            let la_len = all_but_cmd.len();
+            println!("{}", la_len);
             // two types of symbols for line addressing:
             // 1. single character
             // 2. multiple characters (a range or a number larger than 9)
             if la_len == 1 {
-                let addr = line_address[0];
+                let addr = all_but_cmd[0];
                 let bounds = if store.len() == 0 { 0 } else { store.len() - 1 } ;
-                if addr == '.' {
-                    current_addr = LineAddress::One(Single { addr: current_line });
-                } else if addr == '$' {
-                    current_addr = LineAddress::One(Single { addr: bounds });
-                } else if addr == ';' {
-                    current_addr = LineAddress::Many(Range { start: current_line, end: bounds });
-                } else if addr == ',' {
-                    current_addr = LineAddress::Many(Range { start: 0, end: bounds });
-                } else if let Ok(x) = addr.to_string().parse::<usize>() {
-                    if x > store.len() {
-                        println!("?");
-                        continue;
-                    } else {
-                        current_addr = LineAddress::One(Single { addr: x });
-                    }
-                }
+                current_addr = match addr {
+                    '.' => LineAddress::One(Single { addr: current_line }),
+                    '$' => LineAddress::One(Single { addr: bounds }),
+                    ';' => LineAddress::Many(Range { start: current_line, end: bounds }),
+                    ',' => LineAddress::Many(Range { start: 0, end: bounds }),
+                    _ => current_addr
+                };
             }
             if let Some(cmd_la) = line_address.clone().pop() {
                 if cmd_la == 'p' {
-                    let addresses = match current_addr {
+                    let addresses = match current_addr.clone() {
                         LineAddress::One(state) => {
                             let mut v = Vec::new();
                             v.push(state.addr);
@@ -96,7 +89,6 @@ async fn main() {
                             let mut v = Vec::new();
                             v.push(state.start);
                             v.push(state.end);
-                            println!("v_len:{}", v.len());
                             v
                         }
                     };
@@ -131,7 +123,9 @@ async fn main() {
             if cmd == "a" {
                 let url = tkns[1].trim().to_owned();
                 if let Ok(chan) = fetch_feed(&url).await {
+                    let bytes = chan.items().len();
                     store.push((url, chan));
+                    println!("{}", bytes);
                 } else {
                     println!("?");
                 }
@@ -145,6 +139,14 @@ async fn main() {
                         println!("?");
                         break;
                     }
+                }
+            } else if let Ok(n) = cmd.to_string().parse::<usize>() {
+                current_line = n;
+                if n > store.len() {
+                    println!("?");
+                } else {
+                    let (cl_url, _cl_chan) = store[current_line].clone();
+                    println!("{}", cl_url);
                 }
             } else if cmd == "q" {
                 break;
