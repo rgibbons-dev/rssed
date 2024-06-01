@@ -45,7 +45,7 @@ enum LineAddress {
 async fn main() {
     let mut store: Vec<(String, Channel)> = Vec::new();
     let mut current_line = 0;
-    let mut current_addr = LineAddress::One(Single { addr: 0 }); // TODO: this isn't mutating
+    let mut current_addr = LineAddress::One(Single { addr: 0 }); // can be more-locally scoped
     loop {
         // read user input
         let mut user_input = String::new();
@@ -167,17 +167,6 @@ async fn main() {
 // print :: 1 -> p
 // print nth line :: 1 -> <n>p
 // print all lines :: 1 -> ,p
-// for now, not persisted
 
-// future:
-
-// select feed :: 2 -> s <int>
-// -> view titles of all entries :: 2
-// -> view content of entry by (title? number?) :: 2
-
-// focus :: 2 -> f <mode>
-// -> feed mode :: 2 -> f f
-// -> entry mode :: 2 -> f <f_num> e
-
-// save entry (persist to file) :: 3
-// otherwise store last n entries :: 3
+// open feed :: 2 -> <l_a>o
+// exit feed :: 2 -> <l_a>o
