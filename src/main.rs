@@ -76,6 +76,7 @@ async fn cmd_p(url: String) {
 async fn main() {
     let mut store: Vec<(String, Channel)> = Vec::new();
     let mut current_line = 0;
+    let mut item_line = 0;
     loop {
         // read user input
         let mut user_input = String::new();
@@ -106,8 +107,13 @@ async fn main() {
                     ',' => LineAddress::Many(Range { start: 0, end: bounds }),
                     _ => current_addr
                 };
+                if let Ok(addr_one_digit) = addr.to_string().parse::<usize>() {
+                    let bounds_check = |line| if line > bounds { bounds } else { line };
+                    current_addr = LineAddress::One(Single { addr: bounds_check(addr_one_digit) });
+                    item_line = addr_one_digit;
+                }
             } else {
-                let addrs = &all_but_cmd[..la_len-1];
+                let addrs = &all_but_cmd[..la_len];
                 let addrs_str = String::from_iter(addrs.iter().clone());
                 // there are two remaining types of line addressing that we want to handle:
                 // 1. x,y such that x < y and x nor y exceed the bounds of the feed store
@@ -121,6 +127,9 @@ async fn main() {
                 } else if let Ok(addrs_num) = addrs_str.parse::<usize>() {
                     if addrs_num < store.len() - 1 {
                         current_addr = LineAddress::One(Single { addr: addrs_num });
+                        item_line = addrs_num;
+                    } else if cmd.contains("o") {
+                        item_line = addrs_num;
                     } else {
                         println!("?");
                     }
@@ -172,22 +181,11 @@ async fn main() {
                     let (_o_url, o_chan) = &store[current_line];
                     let mut item_store = Vec::new();
                     o_chan.items().into_iter().for_each(|item| item_store.push(item));
-                    if addresses.len() > 1 {
-                        for index in addresses[0]..=addresses[1] {
-                            if let Some(pretty_item) = process_item(item_store[index]) {
-                                println!("{}", pretty_item);
-                            } else {
-                                println!("?");
-                                break;
-                            }
-                        }
+                    item_line = if item_line > item_store.len() - 1 { item_store.len() - 1 } else { item_line };
+                    if let Some(pretty_item) = process_item(item_store[item_line]) {
+                        println!("{}", pretty_item);
                     } else {
-                        let addr = addresses[0];
-                        if let Some(pretty_item) = process_item(item_store[addr]) {
-                            println!("{}", pretty_item);
-                        } else {
-                            println!("?");
-                        }
+                        println!("?");
                     }
                 } else {
                     println!("?");
